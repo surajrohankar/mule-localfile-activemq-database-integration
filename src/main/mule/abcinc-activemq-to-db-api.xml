@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<flow name="activemq-to-db-flow" doc:id="87d004f7-a1d0-4c5c-853a-1888015f93a8" >
+		<jms:listener doc:name="Listen queue" doc:id="6582b748-3666-4b19-88d4-830123ded567" config-ref="JMS_Config" destination="${jms.destination}">
+			<jms:consumer-type >
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:listener>
+		<jms:consume doc:name="Consume sales queue" doc:id="63f315c0-2fce-40d6-9b39-85c5e0f924c7" config-ref="JMS_Config" destination="${jms.destination}" maximumWait="100000" maximumWaitUnit="SECONDS">
+			<jms:consumer-type >
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:consume>
+		<ee:transform doc:name="DW Filter Price, Country, Payment_Type" doc:id="92f6ace2-e10e-420e-8807-849629434924" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[
+%dw 2.0
+output application/json
+---
+payload filter($.Price == "1200" and 
+              ($.Country == "United Kingdom" or 
+               $.Country =="Canada" or 
+               $.Country == "Spain") 
+         and $.Payment_Type == "Mastercard") map ((payload, index) -> 
+{
+	"Transaction_date": payload.Transaction_date,
+	"Product": payload.Product,
+	"Price": payload.Price,
+	"Country": payload.Country,
+	"Payment_Type": payload.Payment_Type
+})
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="[INFO]Payload" doc:id="bc280e35-6597-4226-8f43-7aa178e5949a" message="#[payload]"/>
+		<db:bulk-insert doc:id="93f0274e-3b67-4f10-a079-257dd820ec6b" config-ref="Database_Config" doc:name="Insert abc_inc">
+						<db:sql><![CDATA[INSERT INTO abc_inc (Transaction_date, Product, Price, Country, Payment_Type) VALUES (:Transaction_date, :Product, :Price, :Country, :Payment_Type) ]]></db:sql>
+					</db:bulk-insert>
+		<logger level="INFO" doc:name="[INFO]Data inserted successfully!" doc:id="5f934354-ac0c-4f59-9910-5878d29a645a" message="Data inserted successfully!" />
+	</flow>
+</mule>
